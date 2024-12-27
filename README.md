@@ -16,7 +16,7 @@ This is a **Task Management Web Application** built using **Blazor** and **ASP.N
 ## Technologies Used
 
 ### Backend
-- **ASP.NET Core 8.0**: Framework for building the API and web application.
+- **ASP.NET Core 9.0**: Framework for building the API and web application.
 - **Entity Framework Core**: ORM for database interactions.
 - **Blazor**: Framework for building interactive web UIs.
   
