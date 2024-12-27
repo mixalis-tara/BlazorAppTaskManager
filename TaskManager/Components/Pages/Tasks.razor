@@ -1,0 +1,218 @@
+﻿@page "/tasks"
+@rendermode InteractiveServer
+
+@using TaskManager.Models
+@using TaskManager.Services
+@inject ITaskService TaskService
+
+<h2>Task Management</h2>
+<br />
+
+<TaskForm @ref="_taskForm" OnTaskCreated="AddTask" OnTaskUpdated="UpdateTask" />
+
+<ConfirmationModal OnConfirm="HandleDeleteConfirmation" OnCancel="HandleDeleteCancel" IsVisible="isModalVisible" />
+
+<br />
+<div class="filters mb-4">
+    <div class="row">
+        <div class="col-md-4">
+            <label for="priorityFilter">Filter by Priority:</label>
+                <InputSelect id="priorityFilter" class="form-select" @bind-Value="selectedPriorityFilter">
+                    <option value="">All Priority</option>
+                    @foreach(PriorityLevel priority in Enum.GetValues(typeof(PriorityLevel)))
+                    {
+                        <option value="@priority">@priority</option>
+                    }
+                </InputSelect>
+        </div>
+        <div class="col-md-4">
+            <label for="statusFilter">Filter by Status:</label>
+            <InputSelect id="statusFilter" class="form-select" @bind-Value="selectedStatusFilter">
+                <option value="">All Statuses</option>
+                @foreach (TodoTaskStatus status in Enum.GetValues(typeof(TodoTaskStatus)))
+                {
+                    <option value="@status">@status</option>
+                }
+            </InputSelect>
+        </div>
+    </div>
+    <button class="btn btn-secondary" @onclick="ResetFilters">Reset Filters</button>
+</div>
+
+<div class="task-list mt-4">
+    @if (_tasks == null)
+    {
+        <p>Loading...</p>
+    }
+    else if (!_tasks.Any())
+    {
+        <p>No tasks found. Create your first task!</p>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var task in filteredTasks)
+            {
+                <div class="col-md-4 mb-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">@task.Title</h5>
+                            <p class="card-text">@task.Description</p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="badge bg-@GetPriorityColor(task.Priority)">
+                                    @task.Priority
+                                </span>
+                                <span class="badge bg-@GetStatusColor(task.Status)">
+                                    @task.Status
+                                </span>
+                            </div>
+                            <small class="text-muted">Created: @task.CreatedAt.ToString("g")</small>
+                            <button class="btn btn-primary" @onclick="() => EditTask(task)">Update</button>
+                            <button class="btn btn-danger" @onclick="() => ShowDeleteConfirmation(task.Id)">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<TodoTask>? _tasks;
+    private List<TodoTask>? filteredTasks;
+    private bool isModalVisible = false;
+    private int taskIdToDelete;
+
+    private TaskForm? _taskForm;
+
+    private string? selectedPriorityFilter
+    {
+        get => _selectedPriorityFilter;
+        set
+        {
+            _selectedPriorityFilter = value;
+            ApplyFilters();
+        }
+    }
+    private string? selectedStatusFilter
+    {
+        get => _selectedStatusFilter;
+        set
+        {
+            _selectedStatusFilter = value;
+            ApplyFilters();
+        }
+    }
+    private string? _selectedPriorityFilter = string.Empty;
+    private string? _selectedStatusFilter = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tasks = await TaskService.GetAllTasksAsync();
+        filteredTasks = _tasks;
+    }
+
+    private void ApplyFilters()
+    {
+        filteredTasks = _tasks.Where(task =>
+            (string.IsNullOrEmpty(selectedPriorityFilter) || task.Priority.ToString() == selectedPriorityFilter) &&
+            (string.IsNullOrEmpty(selectedStatusFilter) || task.Status.ToString() == selectedStatusFilter))
+            .ToList();
+    }
+
+    private void ResetFilters()
+    {
+        selectedPriorityFilter = string.Empty;
+        selectedStatusFilter = string.Empty;
+        ApplyFilters();
+    }
+
+    private async Task AddTask(TodoTask newTask)
+    {
+        if (newTask != null && !string.IsNullOrWhiteSpace(newTask.Title))
+        {
+            var createdTask = await TaskService.CreateTaskAsync(newTask);
+            _tasks?.Insert(0, createdTask);
+            ResetFilters();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task UpdateTask(TodoTask updatedTask)
+    {
+        try
+        {
+            await TaskService.UpdateTaskAsync(updatedTask);
+            var index = _tasks?.FindIndex(t => t.Id == updatedTask.Id) ?? -1;
+            if(index >= 0)
+            {
+                _tasks[index] = updatedTask;
+            }
+            ResetFilters();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating task: {ex.Message}");
+        }
+    }
+
+    private void EditTask(TodoTask task)
+    {
+        _taskForm?.LoadTaskForEdit(task);
+    }
+
+    private void ShowDeleteConfirmation(int taskId)
+    {
+        taskIdToDelete = taskId;
+        isModalVisible = true;
+    }
+
+
+    private async Task HandleDeleteConfirmation(bool confirmed)
+    {
+        if (confirmed)
+        {
+            await DeleteTask(taskIdToDelete);
+        }
+        isModalVisible = false;
+    }
+
+    private void HandleDeleteCancel()
+    {
+        isModalVisible = false;
+    }
+    private async Task DeleteTask(int taskId)
+    {
+        try
+        {
+            await TaskService.DeleteTaskAsync(taskId);
+            _tasks = _tasks?.Where(t => t.Id != taskId).ToList();
+            ResetFilters();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting task: {ex.Message}");
+        }
+    }
+
+    private string GetPriorityColor(PriorityLevel priority) => priority switch
+    {
+        PriorityLevel.Low => "success",
+        PriorityLevel.Medium => "info",
+        PriorityLevel.High => "warning",
+        PriorityLevel.Urgent => "danger",
+        _ => "secondary"
+    };
+
+    private string GetStatusColor(TodoTaskStatus status) => status switch
+    {
+        TodoTaskStatus.Todo => "secondary",
+        TodoTaskStatus.InProgress => "primary",
+        TodoTaskStatus.Complete => "success",
+        TodoTaskStatus.OnHold => "warning",
+        _ => "secondary"
+    };
+
+}

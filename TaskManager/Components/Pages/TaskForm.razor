@@ -1,0 +1,91 @@
+﻿@using TaskManager.Models
+
+<h4>@(IsEditMode ? "Edit Task" : "Create New Task")</h4>
+<div>
+    <EditForm Model="NTask" OnValidSubmit="HandleSubmit" FormName="taskForm">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <label>Title</label>
+        <InputText id="title" class="form-control" @bind-Value="NTask.Title" />
+        <br />
+
+        <label>Description</label>
+        <InputTextArea id="description" class="form-control" @bind-Value="NTask.Description" />
+        <br />
+
+        <label>Select Priority</label>
+        <InputSelect id="priority" class="form-select" @bind-Value="NTask.Priority">
+            @foreach (PriorityLevel priority in Enum.GetValues(typeof(PriorityLevel)))
+            {
+                <option value="@priority">@priority</option>
+            }
+        </InputSelect>
+        <br />
+
+        <label>Select Status</label>
+        <InputSelect id="status" class="form-select" @bind-Value="NTask.Status">
+            @foreach (TodoTaskStatus status in Enum.GetValues(typeof(TodoTaskStatus)))
+            {
+                <option value="@status">@status</option>
+            }
+        </InputSelect>
+
+        <button type="submit" class="btn btn-primary">@FormButtonLabel</button>
+        <button type="button" class="btn btn-secondary" @onclick="ClearForm">Cancel</button>
+
+    </EditForm>
+</div>
+
+@code {
+    [Parameter]
+    public EventCallback<TodoTask> OnTaskCreated { get; set; }
+    [Parameter]
+    public EventCallback<TodoTask> OnTaskUpdated { get; set; }
+
+    private TodoTask NTask { get; set; } = new TodoTask();
+    private bool IsEditMode { get; set; } = false;
+
+    private string FormButtonLabel => IsEditMode ? "Save Task" : "Add Task";
+
+    public void LoadTaskForEdit(TodoTask task)
+    {
+        NTask = task;
+        IsEditMode = true;
+        StateHasChanged();
+    }
+
+    private async Task HandleSubmit()
+    {
+        try
+        {
+
+            if (IsEditMode && OnTaskCreated.HasDelegate)
+            {
+                await OnTaskUpdated.InvokeAsync(NTask);
+            }
+            else if (OnTaskCreated.HasDelegate)
+            {
+                await OnTaskCreated.InvokeAsync(NTask);
+            }
+
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in HandleSubmit: {ex.Message}");
+        }
+    }
+
+    private void ClearForm()
+    {
+        ResetForm();
+    }
+
+    private void ResetForm()
+    {
+        NTask = new TodoTask();
+        IsEditMode = false;
+        StateHasChanged();
+    }
+}
